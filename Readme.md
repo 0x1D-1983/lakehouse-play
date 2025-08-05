@@ -2,7 +2,6 @@
 
 ![Architecture Diagram](chart.png)
 
-
 ## Services
  - Trino Web UI: http://localhost:8080
  - MinIO UI: http://localhost:9001 (admin/password)
@@ -10,14 +9,17 @@
  - Polaris: http://localhost:8181
 
 ## Create an Iceberg catalog
-You need to create an Iceberg catalog in Polaris, but to do that, you first need an access token. In a new terminal run this command:
 
+Get access token
 ```
 ACCESS_TOKEN=$(curl -X POST \
   http://localhost:8181/api/catalog/v1/oauth/tokens \
   -d 'grant_type=client_credentials&client_id=root&client_secret=secret&scope=PRINCIPAL_ROLE:ALL' \
   | jq -r '.access_token')
+```
 
+Create an Iceberg catalog in Polaris
+```
   curl -i -X POST \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   http://localhost:8181/api/management/v1/catalogs \
@@ -43,7 +45,6 @@ ACCESS_TOKEN=$(curl -X POST \
 ```
 
 Check that the catalog was correctly created in Polaris:
-
 ```
 curl -X GET http://localhost:8181/api/management/v1/catalogs \
   -H "Authorization: Bearer $ACCESS_TOKEN" | jq
