@@ -1,0 +1,27 @@
+{
+    "$id": "http://example.com/myURI.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": true,
+    "properties": {
+      "transaction_id": {
+        "type": "string"
+      },
+      "user_id": {
+        "type": "string"
+      },
+      "amount": {
+        "type": "number"
+      },
+      "currency": {
+        "type": "string"
+      },
+      "merchant": {
+        "type": "string"
+      },
+      "transaction_time": {
+        "type": "string"
+      }
+    },
+    "title": "Transaction",
+    "type": "object"
+  }

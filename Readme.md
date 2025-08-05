@@ -166,7 +166,8 @@ CREATE TABLE kafka_catalog.sales_db.transactions (
     'properties.bootstrap.servers' = 'broker:29092',  
     'format' = 'json',  
     'scan.startup.mode' = 'earliest-offset',  
-    'topic' = 'transactions'
+    'topic' = 'transactions',
+    'value.format' = 'json-registry'
 );
 ```
 
@@ -230,5 +231,7 @@ jr run \
   --frequency 500ms \
   --output kafka \
   --topic transactions \
-  --kafkaConfig kafka/config.properties
+  --kafkaConfig kafka/config.properties \
+  --serializer json-schema \
+  --autoRegisterSchemas false
 ```
