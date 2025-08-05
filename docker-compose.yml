@@ -75,7 +75,135 @@ services:
       mc mb minio/warehouse;
       mc anonymous set public minio/warehouse;
       tail -f /dev/null
-      " 
+      "
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - local-iceberg-lakehouse
+
+  broker:
+    image: confluentinc/cp-server
+    hostname: broker
+    container_name: broker
+    # volumes:
+    #   - /Users/oxid/code/confluent/kafka_broker.yml:/opt/prometheus/kafka_broker.yml
+    #   - /Users/oxid/code/confluent/jmx_prometheus_javaagent-local.jar:/opt/prometheus/jmx_prometheus_javaagent-local.jar
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      # - "9404:9404"
+      # - "10001:10001"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      # KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://broker:9092clear
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      # KAFKA_JMX_PORT: 10001
+      # KAFKA_JMX_HOSTNAME: broker
+      # KAFKA_OPTS: "-javaagent:/opt/prometheus/jmx_prometheus_javaagent-local.jar=10001:/opt/prometheus/kafka_broker.yml"
+      KAFKA_CONFLUENT_SCHEMA_REGISTRY_URL: http://schema-registry:9091
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker:29092
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      CONFLUENT_METRICS_ENABLE: 'true'
+      CONFLUENT_SUPPORT_CUSTOMER_ID: 'anonymous'
+    networks:
+      - local-iceberg-lakehouse
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - broker
+    ports:
+      - "9091:9091"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:9091 
+    networks:
+      - local-iceberg-lakehouse
+
+  flink-jobmanager:
+    container_name: flink-jobmanager
+    build:  
+      context: .  
+      dockerfile: flink/Dockerfile  
+    ports:  
+      - "8081:8081"  
+    command: jobmanager  
+    networks:  
+      - local-iceberg-lakehouse  
+    depends_on:  
+      - polaris  
+      - minio  
+    environment:  
+      FLINK_PROPERTIES: |  
+        jobmanager.rpc.address: flink-jobmanager  
+        bootstrap.servers: broker:29092
+        
+  flink-taskmanager:  
+    container_name: flink-taskmanager
+    build:  
+      context: .  
+      dockerfile: flink/Dockerfile  
+    command: taskmanager  
+    networks:  
+      - local-iceberg-lakehouse  
+    depends_on:  
+      - polaris  
+      - minio  
+    deploy:  
+      replicas: 1  
+    environment:  
+      AWS_ACCESS_KEY_ID: admin  
+      AWS_SECRET_ACCESS_KEY: password  
+      AWS_REGION: dummy-region  
+      S3_ENDPOINT: http://minio:9000  
+      S3_PATH_STYLE_ACCESS: "true"  
+      FLINK_PROPERTIES: |  
+        jobmanager.rpc.address: flink-jobmanager  
+        taskmanager.numberOfTaskSlots: 8  
+  
+  flink-sql-client:  
+    container_name: flink-sql-client
+    build:  
+      context: .  
+      dockerfile: flink/Dockerfile  
+    command: [ "sql-client.sh" ]  
+    networks:  
+      - local-iceberg-lakehouse  
+    depends_on:  
+      - polaris  
+      - minio  
+    environment:  
+      AWS_ACCESS_KEY_ID: admin  
+      AWS_SECRET_ACCESS_KEY: password  
+      AWS_REGION: dummy-region  
+      S3_ENDPOINT: http://minio:9000  
+      S3_PATH_STYLE_ACCESS: "true"  
+      FLINK_PROPERTIES: |  
+        jobmanager.rpc.address: flink-jobmanager  
+        rest.address: flink-jobmanager  
+    stdin_open: true  
+    tty: true
    
 networks:
   local-iceberg-lakehouse:

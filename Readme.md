@@ -7,6 +7,7 @@
  - MinIO UI: http://localhost:9001 (admin/password)
  - MinIO API: http://localhost:9000
  - Polaris: http://localhost:8181
+ - Flink Web UI: http://localhost:8081
 
 ## Create an Iceberg catalog
 
@@ -137,4 +138,97 @@ ORDER BY committed_at DESC;
 Query the table with time travel
 ``` sql
 SELECT * FROM customers FOR TIMESTAMP AS OF TIMESTAMP '2025-08-05 09:53:43.994 UTC';
+```
+
+## Configuring the Streaming Pipeline
+
+Start Flink SQL
+```
+docker exec -it flink-sql-client sql-client.sh
+```
+
+### Setting up the Kafka - Flink pipeline
+``` sql
+CREATE CATALOG kafka_catalog WITH ('type'='generic_in_memory');  
+  
+CREATE DATABASE kafka_catalog.sales_db;  
+  
+CREATE TABLE kafka_catalog.sales_db.transactions (
+    transaction_id   STRING,  
+    user_id          STRING,  
+    amount           DECIMAL(10, 2),  
+    currency         STRING,  
+    merchant         STRING,  
+    transaction_time TIMESTAMP(3),
+    WATERMARK FOR transaction_time AS transaction_time - INTERVAL '5' SECOND
+) WITH (  
+    'connector' = 'kafka',  
+    'properties.bootstrap.servers' = 'broker:29092',  
+    'format' = 'json',  
+    'scan.startup.mode' = 'earliest-offset',  
+    'topic' = 'transactions'
+);
+```
+
+Quick test it, this should write to the associated Kafka topic
+``` sql
+INSERT INTO kafka_catalog.sales_db.transactions  
+VALUES ('TXN_001', 'USER_123', 45.99, 'GBP', 'Amazon', TIMESTAMP '2025-06-23 10:30:00'),  
+       ('TXN_002', 'USER_456', 12.50, 'GBP', 'Starbucks', TIMESTAMP '2025-06-23 10:35:00'),       
+       ('TXN_003', 'USER_789', 89.99, 'USD', 'Shell', TIMESTAMP '2025-06-23 10:40:00'),       
+       ('TXN_004', 'USER_123', 156.75, 'EUR', 'Tesco', TIMESTAMP '2025-06-23 10:45:00'),       
+       ('TXN_005', 'USER_321', 8.99, 'GBP', 'McDonald''s', TIMESTAMP '2025-06-23 10:50:00');
+```
+
+You can test that the messages are indeed in the topic
+``` shell
+kafka-console-consumer --bootstrap-server broker:9092 --topic transactions --from-beginning
+```
+
+### Setting up the Flink - Polaris Iceberg catalog pipeline
+
+``` sql
+CREATE CATALOG polaris_catalog WITH (
+    'type'='iceberg',  
+    'catalog-type'='rest',  
+    'uri'='http://polaris:8181/api/catalog',  
+    'warehouse'='polariscatalog',  
+    'oauth2-server-uri'='http://polaris:8181/api/catalog/v1/oauth/tokens',  
+    'credential'='root:secret',  
+    'scope'='PRINCIPAL_ROLE:ALL'
+);
+```
+
+Create a database in Flink in that catalog (a database in Flink maps to a namespace in Polaris)
+```
+CREATE DATABASE polaris_catalog.sales_db;
+```
+
+You must enable checkpointing (exactly-once semantics in streaming mode).
+```
+SET 'execution.checkpointing.interval' = '10s';
+```
+
+Create the dynamic table
+``` sql
+CREATE TABLE polaris_catalog.sales_db.transactions AS  
+    SELECT * FROM kafka_catalog.sales_db.transactions;
+```
+
+## Genereate mock data with the JR Tool
+
+Create a topic
+``` shell
+jr createTopic transactions -p 1 -r 1
+```
+
+Generate data
+``` shell
+jr run \
+  --embedded "$(cat transaction.json)" \
+  --num 5 \
+  --frequency 500ms \
+  --output kafka \
+  --topic transactions \
+  --kafkaConfig kafka/config.properties
 ```

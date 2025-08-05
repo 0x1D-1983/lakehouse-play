@@ -1,0 +1,8 @@
+{
+  "transaction_id": "{{key "TXN_" 1000000}}",
+  "user_id": "{{key "USER_" 3000}}",
+  "amount": {{amount 1 300 ""}},
+  "currency": "{{randoms "GBP|EUR|USD|JPY"}}",
+  "merchant": "{{randoms "Amazon|Apple|Google|Microsoft|Netflix|Spotify|Uber|Airbnb"}}",
+  "transaction_time": "{{format_timestamp now "2006-01-02 15:04:05" }}"
+}
