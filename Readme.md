@@ -88,6 +88,11 @@ curl -X GET http://localhost:8181/api/management/v1/principals/root/principal-ro
 
 ## Create an Iceberg table and run some queries
 
+Open Trino session
+``` shell
+docker exec -it trino trino --server localhost:8080 --catalog iceberg
+```
+
 Create a schema first (a namespace in Polaris)
 ``` sql
 CREATE SCHEMA db;
@@ -149,9 +154,9 @@ docker exec -it flink-sql-client sql-client.sh
 
 ### Setting up the Kafka - Flink pipeline
 ``` sql
-CREATE CATALOG kafka_catalog WITH ('type'='generic_in_memory');  
+CREATE CATALOG kafka_catalog WITH ('type'='generic_in_memory');
   
-CREATE DATABASE kafka_catalog.sales_db;  
+CREATE DATABASE kafka_catalog.sales_db;
   
 CREATE TABLE kafka_catalog.sales_db.transactions (
     transaction_id   STRING,  
@@ -201,12 +206,12 @@ CREATE CATALOG polaris_catalog WITH (
 ```
 
 Create a database in Flink in that catalog (a database in Flink maps to a namespace in Polaris)
-```
+``` sql
 CREATE DATABASE polaris_catalog.sales_db;
 ```
 
 You must enable checkpointing (exactly-once semantics in streaming mode).
-```
+``` sql
 SET 'execution.checkpointing.interval' = '10s';
 ```
 
@@ -220,7 +225,8 @@ CREATE TABLE polaris_catalog.sales_db.transactions AS
 
 Create a topic
 ``` shell
-jr createTopic transactions -p 1 -r 1
+# jr createTopic transactions -p 1 -r 1
+kafka-topics --create --bootstrap-server broker:9092 --replication-factor 1 --partitions 1 --topic transactions
 ```
 
 Generate data
@@ -232,6 +238,7 @@ jr run \
   --output kafka \
   --topic transactions \
   --kafkaConfig kafka/config.properties \
+  --schemaRegistry kafka/registry.properties \
   --serializer json-schema \
   --autoRegisterSchemas false
 ```
