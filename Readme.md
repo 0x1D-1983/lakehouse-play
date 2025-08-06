@@ -159,26 +159,25 @@ CREATE CATALOG kafka_catalog WITH ('type'='generic_in_memory');
 CREATE DATABASE kafka_catalog.sales_db;
   
 CREATE TABLE kafka_catalog.sales_db.transactions (
-    transaction_id   STRING,  
-    user_id          STRING,  
-    amount           DECIMAL(10, 2),  
-    currency         STRING,  
-    merchant         STRING,  
+    transaction_id   STRING,
+    user_id          STRING,
+    amount           DECIMAL(10, 2),
+    currency         STRING,
+    merchant         STRING,
     transaction_time TIMESTAMP(3),
     WATERMARK FOR transaction_time AS transaction_time - INTERVAL '5' SECOND
-) WITH (  
-    'connector' = 'kafka',  
-    'properties.bootstrap.servers' = 'broker:29092',  
-    'format' = 'json',  
-    'scan.startup.mode' = 'earliest-offset',  
+) WITH (
+    'connector' = 'kafka',
+    'properties.bootstrap.servers' = 'broker:29092',
     'topic' = 'transactions',
-    'value.format' = 'json-registry'
+    'format' = 'json',
+    'scan.startup.mode' = 'earliest-offset'
 );
 ```
 
 Quick test it, this should write to the associated Kafka topic
 ``` sql
-INSERT INTO kafka_catalog.sales_db.transactions  
+INSERT INTO kafka_catalog.sales_db.transactions
 VALUES ('TXN_001', 'USER_123', 45.99, 'GBP', 'Amazon', TIMESTAMP '2025-06-23 10:30:00'),  
        ('TXN_002', 'USER_456', 12.50, 'GBP', 'Starbucks', TIMESTAMP '2025-06-23 10:35:00'),       
        ('TXN_003', 'USER_789', 89.99, 'USD', 'Shell', TIMESTAMP '2025-06-23 10:40:00'),       
@@ -188,7 +187,7 @@ VALUES ('TXN_001', 'USER_123', 45.99, 'GBP', 'Amazon', TIMESTAMP '2025-06-23 10:
 
 You can test that the messages are indeed in the topic
 ``` shell
-kafka-console-consumer --bootstrap-server broker:9092 --topic transactions --from-beginning
+docker exec -it broker /bin/kafka-console-consumer --bootstrap-server broker:9092 --topic transactions --from-beginning
 ```
 
 ### Setting up the Flink - Polaris Iceberg catalog pipeline
@@ -225,20 +224,20 @@ CREATE TABLE polaris_catalog.sales_db.transactions AS
 
 Create a topic
 ``` shell
-# jr createTopic transactions -p 1 -r 1
-kafka-topics --create --bootstrap-server broker:9092 --replication-factor 1 --partitions 1 --topic transactions
+docker exec -it broker /bin/kafka-topics --create --bootstrap-server broker:9092 --replication-factor 1 --partitions 1 --topic transactions
 ```
 
 Generate data
 ``` shell
 jr run \
   --embedded "$(cat transaction.json)" \
-  --num 5 \
-  --frequency 500ms \
+  --num 1 \
+  --frequency 1s \
   --output kafka \
   --topic transactions \
   --kafkaConfig kafka/config.properties \
   --schemaRegistry kafka/registry.properties \
+  --registryConfig kafka/registry.properties \
   --serializer json-schema \
   --autoRegisterSchemas false
 ```
